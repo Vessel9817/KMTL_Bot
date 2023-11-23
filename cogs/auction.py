@@ -6,7 +6,7 @@ import uuid
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Tuple
 
 # Configure logger for the cog
 logger = logging.getLogger("discord_bot")
@@ -194,7 +194,7 @@ class Auction(commands.Cog):
         """Check if the auction is still active."""
         return auction_id in self.auctions.get(guild_id, {})
 
-    def _determine_winner(self, auction: AuctionData) -> (str, discord.Color):
+    def _determine_winner(self, auction: AuctionData) -> Tuple[str, discord.Color]:
         """Determine the winner of the auction."""
         if auction.bidders:
             winner, winning_bid = max(auction.bidders.items(), key=lambda bid: bid[1])
