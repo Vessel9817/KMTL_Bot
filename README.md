@@ -13,5 +13,5 @@ A Discord bot to facilitate auctions for KMTL. It allows users to create auction
 Command list pending
 
 # Contributors
-- *Vessel9817*
-- *LazyMelon*
+- [*Vessel9817*](https://github.com/Vessel9817)
+- [*LazyMelon*](https://github.com/LazyCorpz)
