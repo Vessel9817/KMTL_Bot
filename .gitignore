@@ -1,3 +1,10 @@
+# Auto-generated VS files
+KMTL_Bot.pyproj
+KMTL_Bot.pyproj.user
+KMTL_Bot.sln
+pyvenv.cfg
+.vs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
