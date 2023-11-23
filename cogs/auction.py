@@ -226,5 +226,5 @@ class Auction(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Sets up the Auction cog."""
-    bot.add_cog(Auction(bot))
+    await bot.add_cog(Auction(bot))
     logger.info("Auction cog loaded")
