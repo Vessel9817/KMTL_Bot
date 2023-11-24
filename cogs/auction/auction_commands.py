@@ -33,7 +33,6 @@ class AuctionCommands:
             return
 
         guild_id = ctx.guild.id
-        self.auctions.setdefault(guild_id, {})
 
         if self._has_max_auctions(guild_id):
             await self._send_error_message(
@@ -159,7 +158,6 @@ class AuctionCommands:
         self._remove_auction(ctx=ctx)
 
     @commands.command(name="closeauction", aliases=["ca", "endauction", "close", "end"])
-    @commands.has_permissions(manage_channels=True)
     async def manual_close_auction(self, ctx: commands.Context, auction_id: str):
         """Allows server staff to manually close an auction before its set duration ends."""
         logger.info(f"{ctx.author} invoked the manual_close_auction command")

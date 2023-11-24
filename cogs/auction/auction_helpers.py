@@ -80,14 +80,23 @@ class AuctionHelpers:
 
     def _get_ongoing_auctions(self, guild_id: int) -> list:
         """Compile a list of formatted strings representing ongoing auctions."""
-        remaining_seconds = self._get_remaining_time(auction)
-        return [
-            f"Auction ID: {auction_id}\n"
-            f"Item: {auction.item}\n"
-            f"Current Bid: {auction.current_bid}\n"
-            f"Time Remaining: {format_time_remaining(remaining_seconds)}"
-            for auction_id, auction in self.auctions.get(guild_id, {}).items()
-        ]
+        ongoing_auctions = []
+        # Iterate over all auction keys and auction objects
+        for auction_key, auction in self.auctions.items():
+            # Check if the auction key's guild part (first element of the tuple) matches the provided guild_id
+            if auction_key[0] == guild_id and auction.active:
+                remaining_seconds = self._get_remaining_time(auction)
+                auction_info = (
+                    f"Auction ID: {auction.id}\n"
+                    f"Item: {auction.item}\n"
+                    f"Current Bid: {auction.current_bid}\n"
+                    f"Time Remaining: {format_time_remaining(remaining_seconds)}"
+                )
+                ongoing_auctions.append(auction_info)
+
+        return ongoing_auctions
+
+
 
     def _generate_auction_id(self) -> str:
         """Generate a new auction ID and increment the counter."""
