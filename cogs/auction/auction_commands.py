@@ -1,19 +1,19 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from utils.auction_data import AuctionData
 from utils.utilities import parse_duration, format_time_remaining
-import uuid
 import logging
 import asyncio
-from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from datetime import datetime
+
 
 logger = logging.getLogger("discord_bot")
+
 
 class AuctionCommands:
     def __init__(self, bot):
         self.bot = bot
-        
+
     @commands.command(name="startauction", aliases=["sa", "beginauction", "start"])
     async def start_auction(
         self,
@@ -27,7 +27,7 @@ class AuctionCommands:
         logger.info(f"{ctx.author} invoked the start_auction command")
 
         if not self._is_in_guild_context(ctx):
-            await _send_error_message(
+            await self._send_error_message(
                 ctx, "This command can only be used in a server."
             )
             return
@@ -69,22 +69,23 @@ class AuctionCommands:
             creator_name=ctx.author.display_name,
             creator_id=ctx.author.id,
         )
+        auction_message = await ctx.send(embed=self._build_auction_embed(new_auction))
+        new_auction.message_id = auction_message.id
+
         self._set_auction(ctx, new_auction)
 
         logger.info(
             f"Auction started for {item} in guild {ctx.guild.name} (ID: {guild_id})"
         )
-        embed = self._build_auction_started_embed(new_auction)
-        await ctx.send(embed=embed)
 
         self.bot.loop.create_task(self.close_auction(ctx, auction_id, ctx.guild.id))
+        # Start the task to update the auction message
+        self.update_auction_message.start(ctx, auction_id)
 
     @commands.command(name="bid", aliases=["placebid", "b"])
-    async def place_bid(
-        self, ctx: commands.Context, auction_id: str, bid_amount: float
-    ):
+    async def place_bid(self, ctx: commands.Context, bid_amount: float):
         """Places a bid on an active auction with the given auction ID and bid amount."""
-        logger.info(f"{ctx.author} placed a bid of {bid_amount}")
+        logger.info(f"{ctx.author} attempted a bid of {bid_amount}")
 
         if not self._is_in_guild_context(ctx):
             embed = discord.Embed(
@@ -114,17 +115,19 @@ class AuctionCommands:
             await ctx.send(embed=embed)
             return
 
+        logger.info(f"{ctx.author} placed a bid of {bid_amount}")
+
         # Update the auction with the new bid
         auction.current_bid = bid_amount
         auction.bidders[ctx.author.display_name] = bid_amount
-
-        logger.info(f"Bid placed on auction {auction_id} by {ctx.author.display_name}")
+        await self.update_auction_embed(auction)
+        logger.info(f"Bid placed on auction {auction.id} by {ctx.author.display_name}")
         embed = discord.Embed(
             title="Bid Placed Successfully",
             description=f"Current highest bid: {bid_amount} by {ctx.author.display_name}",
             color=discord.Color.blue(),
         )
-        embed.set_footer(text=f"Auction ID: {auction_id}")
+        embed.set_footer(text=f"Auction ID: {auction.id}")
         await ctx.send(embed=embed)
 
     async def close_auction(
@@ -149,6 +152,8 @@ class AuctionCommands:
         await self._announce_winner(
             auction.channel_id, auction.item, announcement, color
         )
+        auction.active = False
+        await self.update_auction_embed(auction)
 
         # Remove the auction after closure
         self._remove_auction(ctx=ctx)
@@ -241,3 +246,32 @@ class AuctionCommands:
         else:
             # Log any other command errors
             logger.error(f"An unexpected error occurred: {error}")
+
+    @tasks.loop(seconds=60)
+    async def update_auction_message(self, ctx, auction_id):
+        """Update the auction message with the remaining time."""
+        auction = self._get_auction(ctx)
+        if not auction:
+            self.update_auction_message.stop()  # Stop the task if the auction no longer exists
+            return
+
+        # Calculate the remaining time without timedelta
+        now = datetime.now()
+        remaining_seconds = self._get_remaining_time(auction)
+        # Update the auction message
+
+        if remaining_seconds < 0:
+            self.update_auction_message.stop()  # Stop the task if the auction has ended
+            return
+        await self.update_auction_embed(auction)
+        # Adjust the interval based on how much time is left
+        if remaining_seconds > 604800:  # More than a week remains
+            self.update_auction_message.change_interval(seconds=86400)
+        elif remaining_seconds > 86400:  # More than a day remains
+            self.update_auction_message.change_interval(seconds=3600)
+        else:  # Less than a day remains
+            self.update_auction_message.change_interval(seconds=60)
+
+    # Ensure the task stops if the Cog is unloaded
+    def cog_unload(self):
+        self.update_auction_message.cancel()

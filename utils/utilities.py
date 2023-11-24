@@ -1,20 +1,32 @@
 from datetime import datetime, timedelta
 import re
+import math
 
 
-def format_time_remaining(end_time):
-    time_remaining = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S") - datetime.now()
-    hours, remainder = divmod(time_remaining.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours}h {minutes}m {seconds}s remaining"
+def format_time_remaining(remaining_seconds: float):
+    # Format the remaining time as HH:MM:SS
+    remaining_weeks = int(remaining_seconds // 604800)
+    remaining_days = int(remaining_seconds // 86400)
+    remaining_hours = int(remaining_seconds // 3600)
+    remaining_minutes = int(math.ceil((remaining_seconds % 3600) / 60))
+    if remaining_weeks > 0:
+        formatted_time = f"{remaining_weeks} weels {remaining_days}days"
+    elif remaining_days > 0:
+        formatted_time = f"{remaining_days} days {remaining_hours} hours"
+    elif remaining_hours > 0:
+        formatted_time = f"{remaining_hours} hours {remaining_minutes} minutes"
+    elif remaining_minutes > 1:
+        formatted_time = f"{remaining_minutes} minutes"
+    else:
+        formatted_time = "less than a minute"
+
+    return formatted_time
 
 
 def parse_duration(duration_str: str):
     """Parses a duration string like '1d 2h 30m' or '1 minute' into a timedelta object."""
     # Regex to match patterns like '1d', '2h', '30m', '1 minute', '2 hours'
-    pattern = re.compile(
-        r"(\d+)\s*(d|h|m|s|week|second|minute|hour|day)s?\b", re.I
-    )
+    pattern = re.compile(r"(\d+)\s*(d|h|m|s|week|second|minute|hour|day)s?\b", re.I)
     # Dictionary to map the time unit to the corresponding timedelta keyword
     time_unit_keywords = {
         "d": "days",
@@ -44,7 +56,7 @@ def parse_duration(duration_str: str):
         value, unit = int(match.group(1)), match.group(2).lower()
         if unit in time_unit_keywords:
             if unit == "week" or unit == "weeks":
-                duration += timedelta(days=value*7)  # Convert weeks to days
+                duration += timedelta(days=value * 7)  # Convert weeks to days
             else:
                 kwargs = {time_unit_keywords[unit]: value}
                 duration += timedelta(**kwargs)

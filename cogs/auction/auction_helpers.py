@@ -3,17 +3,18 @@
 import discord
 from discord.ext import commands
 from utils.auction_data import AuctionData
-from utils.utilities import parse_duration, format_time_remaining
-import uuid
-import logging
-import asyncio
-from datetime import datetime, timedelta
+from utils.utilities import format_time_remaining
+from datetime import datetime
 from typing import Optional, Tuple
+import logging
+
+logger = logging.getLogger("discord_bot")
+
 
 class AuctionHelpers:
     def __init__(self, bot):
         self.bot = bot
-    
+
     def _is_in_guild_context(self, ctx: commands.Context) -> bool:
         """Check if the command is invoked in a guild (server) context."""
         return ctx.guild is not None
@@ -37,11 +38,11 @@ class AuctionHelpers:
     def _get_remaining_time(self, auction: AuctionData) -> float:
         """Calculate the remaining time for an auction."""
         # Make sure auction.end_time is a datetime object
-        if isinstance(auction.end_time, str):
-            # If it's a string, parse it into a datetime object
-            auction.end_time = datetime.strptime(
-                auction.end_time, "%Y-%m-%d %H:%M:%S"
-            )  # Adjust the format if necessary
+        if not isinstance(auction.end_time, datetime):
+            logger.error(
+                f"Invalid end_time for auction {auction.id}: {auction.end_time}"
+            )
+            return 0
         remaining_time = (auction.end_time - datetime.now()).total_seconds()
         return max(remaining_time, 0)
 
@@ -49,6 +50,7 @@ class AuctionHelpers:
         """Determine the winner of the auction."""
         if auction.bidders:
             winner, winning_bid = max(auction.bidders.items(), key=lambda bid: bid[1])
+            auction.winner = winner
             return (
                 f"The auction for {auction.item} is won by {winner} with a bid of {winning_bid}!",
                 discord.Color.green(),
@@ -78,11 +80,12 @@ class AuctionHelpers:
 
     def _get_ongoing_auctions(self, guild_id: int) -> list:
         """Compile a list of formatted strings representing ongoing auctions."""
+        remaining_seconds = self._get_remaining_time(auction)
         return [
             f"Auction ID: {auction_id}\n"
             f"Item: {auction.item}\n"
             f"Current Bid: {auction.current_bid}\n"
-            f"Time Remaining: {format_time_remaining(auction.end_time)}"
+            f"Time Remaining: {format_time_remaining(remaining_seconds)}"
             for auction_id, auction in self.auctions.get(guild_id, {}).items()
         ]
 
@@ -105,23 +108,63 @@ class AuctionHelpers:
         """Store an auction in the auctions dictionary."""
         auction_key = self._get_auction_key(ctx)
         self.auctions[auction_key] = auction_data
-        
+
     async def _send_error_message(self, ctx: commands.Context, message: str):
         """Send an error message embedded in the Discord channel."""
-        embed = discord.Embed(title="Error", description=message, color=discord.Color.red())
-        await ctx.send(embed=embed)
-    
-    def _build_auction_started_embed(self, auction: AuctionData) -> discord.Embed:
-        """Build an embed for when an auction starts."""
         embed = discord.Embed(
-            title="Auction Started!",
-            description=(
-                f"**Item:** {auction.item}\n"
-                f"**Starting Bid:** {auction.starting_bid}\n"
-                f"**Minimum Increment:** {auction.min_increment}\n"
-                f"**Ends At:** {auction.end_time.strftime('%Y-%m-%d %H:%M:%S')}"
-            ),
-            color=discord.Color.green()
+            title="Error", description=message, color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
+    def _build_auction_embed(self, auction: AuctionData) -> discord.Embed:
+        """Build an embed for auction start and updates."""
+        remaining_seconds = self._get_remaining_time(auction)
+        formatted_time = format_time_remaining(remaining_seconds)
+
+        # Build the auction description including the current highest bid
+        description = (
+            f"**Item:** {auction.item}\n"
+            f"**Starting Bid:** {auction.starting_bid}\n"
+            f"**Minimum Increment:** {auction.min_increment}\n"
+        )
+
+        # Add current highest bid information if there are bids
+        if auction.bidders:
+            highest_bidder, highest_bid = max(
+                auction.bidders.items(), key=lambda bid: bid[1]
+            )
+            description += f"**Highest Bid:** {highest_bid} by {highest_bidder}\n"
+        if auction.active:
+            description += f"**Time Remaining:** {formatted_time}"
+        else:
+            description += f"**Auction Ended**\n"
+            description += f"**Winner:** {auction.winner}\n"
+
+        # Choose color based on whether it's a start or update
+        embed_color = discord.Color.green() if auction.active else discord.Color.blue()
+
+        embed = discord.Embed(
+            title=f"Auction: {auction.item}", description=description, color=embed_color
         )
         embed.set_footer(text=f"Auction ID: {auction.id}")
+
         return embed
+
+    async def update_auction_embed(self, auction: AuctionData):
+        """Update the auction embed with the current information."""
+        # Create a new embed with updated information
+        updated_embed = self._build_auction_embed(auction)
+
+        if auction.message_id:
+            try:
+                channel = self.bot.get_channel(auction.channel_id)
+                auction_message = await channel.fetch_message(auction.message_id)
+                await auction_message.edit(embed=updated_embed)
+            except discord.NotFound:
+                logger.error(
+                    f"Auction message with ID {auction.message_id} could not be found."
+                )
+            except discord.Forbidden:
+                logger.error(
+                    f"Bot does not have permissions to edit the auction message with ID {auction.message_id}."
+                )
