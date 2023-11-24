@@ -32,7 +32,7 @@ async def on_ready():
 # Function to load cogs asynchronously
 async def load_cogs():
     # Load the auction cog
-    await bot.load_extension('cogs.auction')
+    await bot.load_extension('cogs.auction.auction')
     # Load the help cog
     await bot.load_extension('cogs.help')
 
