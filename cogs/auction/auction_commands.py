@@ -65,6 +65,12 @@ class AuctionCommands:
                 ctx, "Invalid duration format. Please use formats like '1d 2h 30m'."
             )
             return
+        
+        if duration.total_seconds() < self.MIN_AUCTION_DURATION:
+            await self._send_error_message(
+                ctx, "The auction duration must be at least 5 minutes."
+            )
+            return
 
         end_time = datetime.now() + duration
         auction_id = self._generate_auction_id()

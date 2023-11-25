@@ -11,6 +11,7 @@ logger = logging.getLogger("discord_bot")
 
 class Auction(commands.Cog, AuctionCommands, AuctionHelpers):
     MAX_AUCTIONS_PER_GUILD = 10  # Limit the number of concurrent auctions per guild
+    MIN_AUCTION_DURATION = 5 * 60  # Minimum duration for an auction in seconds
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
