@@ -71,9 +71,12 @@ class AuctionCommands:
 
         bid_amount = self.parse_amount(bid_amount_str)
         if bid_amount is None:
-            await ctx.send(
-                "Invalid bid format. Please enter a number or use formats like '1k', '1m', etc."
+            embed = discord.Embed(
+                title="Error",
+                description="Invalid bid format. Please enter a number or use formats like '1k', '1m', etc.",
+                color=discord.Color.red(),
             )
+            await ctx.send(embed=embed)
             return
 
         if not await self._validate_guild_context_and_auction(ctx):
@@ -81,10 +84,12 @@ class AuctionCommands:
 
         auction = self._get_auction(ctx)
         if not self._validate_bid(auction, bid_amount):
-            await ctx.send(
-                f"Your bid must be at least {self.format_amount(auction.min_increment)} "
-                f"higher than the current bid of {self.format_amount(auction.current_bid)}."
+            embed = discord.Embed(
+                title="Error",
+                description=f"Your bid must be at least {self.format_amount(auction.min_increment)} higher than the current bid of {self.format_amount(auction.current_bid)}.",
+                color=discord.Color.red(),
             )
+            await ctx.send(embed=embed)
             return
 
         auction.current_bid = bid_amount
@@ -95,9 +100,13 @@ class AuctionCommands:
         if self.BID_EMOJI_TOGGLE:
             await ctx.message.add_reaction("✅")
         else:
-            await ctx.send(
-                f"Current highest bid: {self.format_amount(bid_amount)} by {ctx.author.display_name}"
+            embed = discord.Embed(
+                title="Bid Placed Successfully",
+                description=f"Current highest bid: {bid_amount_str} by {ctx.author.display_name}",
+                color=discord.Color.blue(),
             )
+            embed.set_footer(text=f"Auction ID: {auction.id}")
+            await ctx.send(embed=embed)
 
     async def close_auction(
         self, ctx, auction_id: str, guild_id: int, manual: bool = False
