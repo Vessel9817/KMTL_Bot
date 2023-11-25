@@ -136,7 +136,7 @@ class AuctionCommands:
         if not self._is_valid_bid(auction, bid_amount):
             embed = discord.Embed(
                 title="Error",
-                description=f"Your bid must be at least {auction.min_increment} higher than the current bid of {auction.current_bid}.",
+                description=f"Your bid must be at least {self.format_amount(auction.min_increment)} higher than the current bid of {self.format_amount(auction.current_bid)}.",
                 color=discord.Color.red(),
             )
             await ctx.send(embed=embed)
@@ -148,14 +148,18 @@ class AuctionCommands:
         auction.current_bid = bid_amount
         auction.bidders[ctx.author.display_name] = bid_amount
         await self.update_auction_embed(auction)
+        
         logger.info(f"Bid placed on auction {auction.id} by {ctx.author.display_name}")
-        embed = discord.Embed(
-            title="Bid Placed Successfully",
-            description=f"Current highest bid: {bid_amount_str} by {ctx.author.display_name}",
-            color=discord.Color.blue(),
-        )
-        embed.set_footer(text=f"Auction ID: {auction.id}")
-        await ctx.send(embed=embed)
+        if self.BID_EMOJI_TOGGLE:
+            await ctx.message.add_reaction("✅")
+        else:
+            embed = discord.Embed(
+                title="Bid Placed Successfully",
+                description=f"Current highest bid: {bid_amount_str} by {ctx.author.display_name}",
+                color=discord.Color.blue(),
+            )
+            embed.set_footer(text=f"Auction ID: {auction.id}")
+            await ctx.send(embed=embed)
 
     async def close_auction(
         self, ctx, auction_id: str, guild_id: int, manual: bool = False
