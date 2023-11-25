@@ -26,7 +26,7 @@ def format_time_remaining(remaining_seconds: float):
 def parse_duration(duration_str: str):
     """Parses a duration string like '1d 2h 30m' or '1 minute' into a timedelta object."""
     # Regex to match patterns like '1d', '2h', '30m', '1 minute', '2 hours'
-    pattern = re.compile(r"(\d+)\s*(d|h|m|s|week|second|minute|hour|day)s?\b", re.I)
+    pattern = re.compile(r"(\d+)\s*(d|day|h|hour|hr|m|min|minute|s|sec|second|w|week)s?\b", re.I)
     # Dictionary to map the time unit to the corresponding timedelta keyword
     time_unit_keywords = {
         "d": "days",
@@ -36,6 +36,7 @@ def parse_duration(duration_str: str):
         "hour": "hours",
         "hr": "hours",
         "hrs": "hours",
+        "hours": "hours",
         "m": "minutes",
         "minute": "minutes",
         "min": "minutes",
@@ -46,6 +47,7 @@ def parse_duration(duration_str: str):
         "sec": "seconds",
         "secs": "seconds",
         "seconds": "seconds",
+        "w": "weeks",
         "week": "weeks",
         "weeks": "weeks",
     }
@@ -53,6 +55,7 @@ def parse_duration(duration_str: str):
     duration = timedelta()
     # Find all matches and add them to the duration
     for match in pattern.finditer(duration_str):
+        print(match.group(1), match.group(2))
         value, unit = int(match.group(1)), match.group(2).lower()
         if unit in time_unit_keywords:
             if unit == "week" or unit == "weeks":

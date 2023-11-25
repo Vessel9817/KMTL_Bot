@@ -52,7 +52,7 @@ class AuctionHelpers:
             winner, winning_bid = max(auction.bidders.items(), key=lambda bid: bid[1])
             auction.winner = winner
             return (
-                f"The auction for {auction.item} is won by {winner} with a bid of {winning_bid}!",
+                f"The auction for {auction.item} is won by {winner} with a bid of {self.format_amount(winning_bid)}!",
                 discord.Color.green(),
             )
         return (
@@ -89,7 +89,7 @@ class AuctionHelpers:
                 auction_info = (
                     f"Auction ID: {auction.id}\n"
                     f"Item: {auction.item}\n"
-                    f"Current Bid: {auction.current_bid}\n"
+                    f"Current Bid: {self.format_amount(auction.current_bid)}\n"
                     f"Time Remaining: {format_time_remaining(remaining_seconds)}"
                 )
                 ongoing_auctions.append(auction_info)
@@ -133,8 +133,8 @@ class AuctionHelpers:
         # Build the auction description including the current highest bid
         description = (
             f"**Item:** {auction.item}\n"
-            f"**Starting Bid:** {auction.starting_bid}\n"
-            f"**Minimum Increment:** {auction.min_increment}\n"
+            f"**Starting Bid:** {self.format_amount(auction.starting_bid)}\n"
+            f"**Minimum Increment:** {self.format_amount(auction.min_increment)}\n"
         )
 
         # Add current highest bid information if there are bids
@@ -142,7 +142,7 @@ class AuctionHelpers:
             highest_bidder, highest_bid = max(
                 auction.bidders.items(), key=lambda bid: bid[1]
             )
-            description += f"**Highest Bid:** {highest_bid} by {highest_bidder}\n"
+            description += f"**Highest Bid:** {self.format_amount(highest_bid)} by {highest_bidder}\n"
         if auction.active:
             description += f"**Time Remaining:** {formatted_time}"
         else:
@@ -177,3 +177,59 @@ class AuctionHelpers:
                 logger.error(
                     f"Bot does not have permissions to edit the auction message with ID {auction.message_id}."
                 )
+                
+    def parse_amount(self, amount_str: str) -> float:
+        """
+        Parses a bid amount string into a float.
+        Accepts formats like '1k', '1m', '1b', '1t', etc., and their uppercase equivalents,
+        including decimal values like '1.5m'.
+        Returns None if the format is incorrect.
+        """
+        shorthand_multipliers = {
+            'k': 1_000,
+            'm': 1_000_000,
+            'b': 1_000_000_000,
+            't': 1_000_000_000_000
+        }
+
+        if amount_str[-1].lower() in shorthand_multipliers:
+            try:
+                number_part = float(amount_str[:-1])
+                multiplier = shorthand_multipliers[amount_str[-1].lower()]
+                return number_part * multiplier
+            except ValueError:
+                return None
+        else:
+            try:
+                return float(amount_str)
+            except ValueError:
+                return None
+
+    def format_amount(self, amount: float) -> str:
+        """
+        Formats a numeric amount into a shorthand notation with dynamic precision.
+        Examples: 
+        - 1500 -> '1.5k'
+        - 2500000 -> '2.5m'
+        - 123456789 -> '123.456789m'
+        - 1200000 -> '1.2m'
+        """
+        units = ["", "K", "M", "B", "T"]
+        idx = 0
+
+        while amount >= 1000 and idx < len(units) - 1:
+            amount /= 1000.0
+            idx += 1
+
+        # Determine the number of decimal places needed
+        if amount - int(amount) == 0:
+            # No decimal part
+            formatted_amount = f"{int(amount)}"
+        else:
+            # Keep all significant digits in the decimal part
+            decimal_part = str(amount).split('.')[1]
+            # Count non-zero digits in the decimal part for precision
+            non_zero_digits = len(decimal_part.rstrip('0'))
+            formatted_amount = f"{amount:.{non_zero_digits}f}".rstrip('0').rstrip('.')
+
+        return formatted_amount + units[idx]

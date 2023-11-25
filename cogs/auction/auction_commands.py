@@ -20,13 +20,24 @@ class AuctionCommands:
         self,
         ctx: commands.Context,
         item: str,
-        starting_bid: float,
-        min_increment: float,
+        starting_bid_str: str,
+        min_increment_str: str,
         *duration_parts: str,
     ):
         """Starts a new auction with the provided item, starting bid, minimum increment, and duration."""
         logger.info(f"{ctx.author} invoked the start_auction command")
-
+        starting_bid = self.parse_amount(starting_bid_str)
+        if starting_bid is None:
+            await ctx.send(
+                "Invalid starting bid format. Please enter a number or use formats like '1k', '1m', etc."
+            )
+            return
+        min_increment = self.parse_amount(min_increment_str)
+        if starting_bid is None:
+            await ctx.send(
+                "Invalid min increment format. Please enter a number or use formats like '1k', '1m', etc."
+            )
+            return
         if not self._is_in_guild_context(ctx):
             await self._send_error_message(
                 ctx, "This command can only be used in a server."
@@ -85,10 +96,18 @@ class AuctionCommands:
         self.auction_timers[new_auction.id] = auction_timer
 
     @commands.command(name="bid", aliases=["placebid", "b"])
-    async def place_bid(self, ctx: commands.Context, bid_amount: float):
+    async def place_bid(self, ctx: commands.Context, bid_amount_str: str):
         """Places a bid on an active auction with the given auction ID and bid amount."""
-        logger.info(f"{ctx.author} attempted a bid of {bid_amount}")
 
+        bid_amount = self.parse_amount(bid_amount_str)
+        if bid_amount is None:
+            await ctx.send(
+                "Invalid bid format. Please enter a number or use formats like '1k', '1m', etc."
+            )
+            return
+        bid_amount_str = self.format_amount(bid_amount)
+
+        logger.info(f"{ctx.author} attempted a bid of {bid_amount_str} or {bid_amount}")
         if not self._is_in_guild_context(ctx):
             embed = discord.Embed(
                 title="Error",
@@ -126,7 +145,7 @@ class AuctionCommands:
         logger.info(f"Bid placed on auction {auction.id} by {ctx.author.display_name}")
         embed = discord.Embed(
             title="Bid Placed Successfully",
-            description=f"Current highest bid: {bid_amount} by {ctx.author.display_name}",
+            description=f"Current highest bid: {bid_amount_str} by {ctx.author.display_name}",
             color=discord.Color.blue(),
         )
         embed.set_footer(text=f"Auction ID: {auction.id}")
