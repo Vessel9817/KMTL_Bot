@@ -58,7 +58,6 @@ def parse_duration(duration_str: str):
     duration = timedelta()
     # Find all matches and add them to the duration
     for match in pattern.finditer(duration_str):
-        print(match.group(1), match.group(2))
         value, unit = int(match.group(1)), match.group(2).lower()
         if unit in time_unit_keywords:
             if unit == "week" or unit == "weeks":
