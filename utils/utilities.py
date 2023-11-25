@@ -1,3 +1,4 @@
+# utils/utilities.py
 from datetime import datetime, timedelta
 import re
 import math
@@ -26,7 +27,9 @@ def format_time_remaining(remaining_seconds: float):
 def parse_duration(duration_str: str):
     """Parses a duration string like '1d 2h 30m' or '1 minute' into a timedelta object."""
     # Regex to match patterns like '1d', '2h', '30m', '1 minute', '2 hours'
-    pattern = re.compile(r"(\d+)\s*(d|day|h|hour|hr|m|min|minute|s|sec|second|w|week)s?\b", re.I)
+    pattern = re.compile(
+        r"(\d+)\s*(d|day|h|hour|hr|m|min|minute|s|sec|second|w|week)s?\b", re.I
+    )
     # Dictionary to map the time unit to the corresponding timedelta keyword
     time_unit_keywords = {
         "d": "days",

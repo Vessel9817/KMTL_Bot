@@ -1,3 +1,4 @@
+# cogs/help.py
 import discord
 from discord.ext import commands
 import logging
@@ -35,11 +36,13 @@ class CustomHelp(commands.HelpCommand):
         await channel.send(embed=help_embed)
 
     def get_command_signature(self, command):
-        return "%s%s %s" % (
+        aliases = " | ".join(command.aliases)
+        signature = "%s%s %s" % (
             self.command_prefix,
             command.qualified_name,
             command.signature,
         )
+        return signature + (f' \n(Aliases: {aliases})\n' if aliases else '')
 
 
 async def setup(bot):

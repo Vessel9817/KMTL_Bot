@@ -1,4 +1,4 @@
-# auction_helpers.py
+# cogs/auction/auction_helpers.py
 
 import discord
 from discord.ext import commands
@@ -7,6 +7,7 @@ from utils.utilities import format_time_remaining
 from datetime import datetime
 from typing import Optional, Tuple
 import logging
+import asyncio
 
 logger = logging.getLogger("discord_bot")
 
@@ -96,8 +97,6 @@ class AuctionHelpers:
 
         return ongoing_auctions
 
-
-
     def _generate_auction_id(self) -> str:
         """Generate a new auction ID and increment the counter."""
         auction_id = self.next_auction_id
@@ -177,7 +176,7 @@ class AuctionHelpers:
                 logger.error(
                     f"Bot does not have permissions to edit the auction message with ID {auction.message_id}."
                 )
-                
+
     def parse_amount(self, amount_str: str) -> float:
         """
         Parses a bid amount string into a float.
@@ -186,10 +185,10 @@ class AuctionHelpers:
         Returns None if the format is incorrect.
         """
         shorthand_multipliers = {
-            'k': 1_000,
-            'm': 1_000_000,
-            'b': 1_000_000_000,
-            't': 1_000_000_000_000
+            "k": 1_000,
+            "m": 1_000_000,
+            "b": 1_000_000_000,
+            "t": 1_000_000_000_000,
         }
 
         if amount_str[-1].lower() in shorthand_multipliers:
@@ -208,7 +207,7 @@ class AuctionHelpers:
     def format_amount(self, amount: float) -> str:
         """
         Formats a numeric amount into a shorthand notation with dynamic precision.
-        Examples: 
+        Examples:
         - 1500 -> '1.5k'
         - 2500000 -> '2.5m'
         - 123456789 -> '123.456789m'
@@ -227,9 +226,120 @@ class AuctionHelpers:
             formatted_amount = f"{int(amount)}"
         else:
             # Keep all significant digits in the decimal part
-            decimal_part = str(amount).split('.')[1]
+            decimal_part = str(amount).split(".")[1]
             # Count non-zero digits in the decimal part for precision
-            non_zero_digits = len(decimal_part.rstrip('0'))
-            formatted_amount = f"{amount:.{non_zero_digits}f}".rstrip('0').rstrip('.')
+            non_zero_digits = len(decimal_part.rstrip("0"))
+            formatted_amount = f"{amount:.{non_zero_digits}f}".rstrip("0").rstrip(".")
 
         return formatted_amount + units[idx]
+
+    async def _validate_bid_and_increment(self, ctx, starting_bid, min_increment):
+        if starting_bid is None:
+            await ctx.send(
+                "Invalid starting bid format. Please enter a number or use formats like '1k', '1m', etc."
+            )
+            return False
+        if min_increment is None:
+            await ctx.send(
+                "Invalid min increment format. Please enter a number or use formats like '1k', '1m', etc."
+            )
+            return False
+        return True
+
+    async def _validate_guild_and_auction_limits(self, ctx):
+        if not self._is_in_guild_context(ctx):
+            await self._send_error_message(
+                ctx, "This command can only be used in a server."
+            )
+            return False
+        if self._has_max_auctions(ctx.guild.id):
+            await self._send_error_message(
+                ctx,
+                "The maximum number of concurrent auctions for this server has been reached.",
+            )
+            return False
+        if self._is_auction_active(ctx):
+            await self._send_error_message(
+                ctx, "There is already an ongoing auction in this channel."
+            )
+            return False
+        return True
+
+    async def _validate_duration(self, ctx, duration):
+        if duration is None or duration.total_seconds() < self.MIN_AUCTION_DURATION:
+            await self._send_error_message(
+                ctx,
+                "Invalid or too short duration format. Please use formats like '1d 2h 30m'.",
+            )
+            return False
+        return True
+
+    def _create_auction_data(
+        self, auction_id, item, starting_bid, min_increment, end_time, ctx
+    ):
+        return AuctionData(
+            id=auction_id,
+            item=item,
+            starting_bid=starting_bid,
+            min_increment=min_increment,
+            end_time=end_time,
+            channel_id=ctx.channel.id,
+            guild_id=ctx.guild.id,
+            creator_name=ctx.author.display_name,
+            creator_id=ctx.author.id,
+        )
+
+    async def _validate_guild_context_and_auction(self, ctx):
+        if not self._is_in_guild_context(ctx):
+            await self._send_error_message(
+                ctx, "This command can only be used in a server."
+            )
+            return False
+
+        auction = self._get_auction(ctx)
+        if not auction:
+            await self._send_error_message(
+                ctx, "There is no ongoing auction in this channel."
+            )
+            return False
+        return True
+
+    def _validate_bid(self, auction, bid_amount):
+        return auction and self._is_valid_bid(auction, bid_amount)
+
+    def _cancel_auction_timer(self, auction_id):
+        auction_timer = self.auction_timers.get(auction_id)
+        if auction_timer and not auction_timer.done():
+            auction_timer.cancel()
+            del self.auction_timers[auction_id]
+
+    async def _wait_for_auction_end(self, auction):
+        remaining_time = self._get_remaining_time(auction)
+        await asyncio.sleep(remaining_time)
+
+    async def _validate_close_auction_permissions(self, ctx, auction):
+        if (
+            ctx.author.id != auction.creator_id
+            and not ctx.author.guild_permissions.manage_channels
+        ):
+            await self._send_error_message(
+                ctx, "You do not have permission to close this auction."
+            )
+            return False
+        return True
+
+    async def _handle_command_not_found(self, ctx, error):
+        logger.info(f"Command not found: {ctx.message.content}")
+
+    async def _handle_missing_required_argument(self, ctx, error):
+        await ctx.send(f"Missing a required argument: {error.param.name}")
+        await ctx.send_help(ctx.command)
+
+    async def _handle_bad_argument(self, ctx, error):
+        await ctx.send("One or more arguments are invalid. Please check your input.")
+        await ctx.send_help(ctx.command)
+
+    async def _handle_command_on_cooldown(self, ctx, error):
+        await ctx.send(
+            f"This command is on cooldown. Try again after {error.retry_after:.2f} seconds."
+        )

@@ -1,3 +1,4 @@
+#cogs/auction/auction.py
 from discord.ext import commands, tasks
 import logging
 from .auction_helpers import AuctionHelpers

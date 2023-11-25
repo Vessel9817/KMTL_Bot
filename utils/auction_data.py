@@ -1,3 +1,4 @@
+# utils/auction_data.py
 class AuctionData:
     def __init__(
         self,
