@@ -189,24 +189,29 @@ class AuctionCommands:
         logger.info(f"{ctx.author} invoked the manual_close_auction command")
 
         if not self._is_in_guild_context(ctx):
-            embed = discord.Embed(
-                title="Error",
-                description="This command can only be used in a server.",
-                color=discord.Color.red(),
-            )
-            await ctx.send(embed=embed)
+            await self._send_error_message(ctx, "This command can only be used in a server.")
+            return
+
+        auction = self._get_auction(ctx)
+        if not auction:
+            await self._send_error_message(ctx, f"Auction {auction_id} not found.")
+            return
+
+        # Check if the user is either the auction creator or has the 'manage_channels' permission
+        if ctx.author.id != auction.creator_id and not ctx.author.guild_permissions.manage_channels:
+            await self._send_error_message(ctx, "You do not have permission to close this auction.")
             return
 
         await self.close_auction(ctx, auction_id, ctx.guild.id, manual=True)
+        closed_by = ctx.author.display_name
+
         embed = discord.Embed(
             title="Auction Closed",
-            description=f"Auction {auction_id} has been closed manually.",
+            description=f"Auction {auction_id} has been closed manually by {closed_by}.",
             color=discord.Color.orange(),
         )
         await ctx.send(embed=embed)
-        logger.info(
-            f"Auction {auction_id} closed manually by {ctx.author.display_name}"
-        )
+        logger.info(f"Auction {auction_id} closed manually by {ctx.author.display_name}")
 
     @commands.command(
         name="ongoingauctions",
