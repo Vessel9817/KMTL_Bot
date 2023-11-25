@@ -13,6 +13,7 @@ logger = logging.getLogger("discord_bot")
 class AuctionCommands:
     def __init__(self, bot):
         self.bot = bot
+        self.auction_timers = {}  # Dictionary to keep track of auction tasks
 
     @commands.command(name="startauction", aliases=["sa", "beginauction", "start"])
     async def start_auction(
@@ -78,8 +79,10 @@ class AuctionCommands:
         )
 
         self.bot.loop.create_task(self.close_auction(ctx, auction_id, ctx.guild.id))
-        # Start the task to update the auction message
-        self.update_auction_message.start(ctx, auction_id)
+
+        # Start a coroutine for the new auction
+        auction_timer = asyncio.create_task(self.run_timer(ctx, new_auction))
+        self.auction_timers[new_auction.id] = auction_timer
 
     @commands.command(name="bid", aliases=["placebid", "b"])
     async def place_bid(self, ctx: commands.Context, bid_amount: float):
@@ -135,6 +138,10 @@ class AuctionCommands:
         """Closes the auction identified by the auction ID, either manually or automatically after the set duration."""
         logger.info(f"Attempting to close auction {auction_id} in guild {guild_id}")
         auction = self._get_auction(ctx)
+        auction_timer = self.auction_timers.get(auction_id)
+        if auction_timer and not auction_timer.done():
+            auction_timer.cancel()
+            del self.auction_timers[auction_id]
         if not auction:
             logger.error(f"Auction {auction_id} not found in guild {guild_id}.")
             return
@@ -245,31 +252,19 @@ class AuctionCommands:
             # Log any other command errors
             logger.error(f"An unexpected error occurred: {error}")
 
-    @tasks.loop(seconds=60)
-    async def update_auction_message(self, ctx, auction_id):
-        """Update the auction message with the remaining time."""
-        auction = self._get_auction(ctx)
-        if not auction:
-            self.update_auction_message.stop()  # Stop the task if the auction no longer exists
+    async def run_timer(self, ctx, auction):
+        if not self._get_auction(ctx):
             return
+        while self._get_remaining_time(auction) > 0:
+            remaining_seconds = self._get_remaining_time(auction)
 
-        # Calculate the remaining time without timedelta
-        now = datetime.now()
-        remaining_seconds = self._get_remaining_time(auction)
-        # Update the auction message
+            await self.update_auction_embed(auction)
 
-        if remaining_seconds < 0:
-            self.update_auction_message.stop()  # Stop the task if the auction has ended
-            return
-        await self.update_auction_embed(auction)
-        # Adjust the interval based on how much time is left
-        if remaining_seconds > 604800:  # More than a week remains
-            self.update_auction_message.change_interval(seconds=86400)
-        elif remaining_seconds > 86400:  # More than a day remains
-            self.update_auction_message.change_interval(seconds=3600)
-        else:  # Less than a day remains
-            self.update_auction_message.change_interval(seconds=60)
-
-    # Ensure the task stops if the Cog is unloaded
-    def cog_unload(self):
-        self.update_auction_message.cancel()
+            # Use match case to adjust the interval
+            match remaining_seconds:
+                case seconds if seconds > 604800:  # More than a week remains
+                    await asyncio.sleep(86400)  # Wait for 1 day before updating again
+                case seconds if seconds > 86400:  # More than a day remains
+                    await asyncio.sleep(3600)  # Wait for 1 hour before updating again
+                case _:  # Less than a day remains
+                    await asyncio.sleep(60)  # Wait for 60 seconds before updating again
