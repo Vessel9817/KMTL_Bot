@@ -220,11 +220,10 @@ class AuctionCommands:
 
             await self.update_auction_embed(auction)
 
-            # Use match case to adjust the interval
-            match remaining_seconds:
-                case seconds if seconds > 604800:  # More than a week remains
-                    await asyncio.sleep(86400)  # Wait for 1 day before updating again
-                case seconds if seconds > 86400:  # More than a day remains
-                    await asyncio.sleep(3600)  # Wait for 1 hour before updating again
-                case _:  # Less than a day remains
-                    await asyncio.sleep(60)  # Wait for 60 seconds before updating again
+            if remaining_seconds > 604800:  # More than a week remains
+                await asyncio.sleep(86400)  # Wait for 1 day before updating again
+            elif remaining_seconds > 86400:  # More than a day remains
+                await asyncio.sleep(3600)  # Wait for 1 hour before updating again
+            else:  # Less than a day remains
+                await asyncio.sleep(60)  # Wait for 60 seconds before updating again
+
