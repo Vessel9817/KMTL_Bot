@@ -22,7 +22,7 @@ intents = discord.Intents.default()
 intents.message_content = True  # Enable message content intent
 
 # Create an instance of the bot with a specific command prefix and the defined intents
-bot = commands.Bot(command_prefix='$', intents=intents)
+bot = commands.Bot(command_prefix='P.', intents=intents)
 
 # Event listener for when the bot successfully connects to Discord
 @bot.event

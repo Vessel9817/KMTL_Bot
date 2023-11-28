@@ -134,7 +134,7 @@ class AuctionCommands:
         self._remove_auction(ctx)
 
     @commands.command(name="closeauction", aliases=["ca", "endauction", "close", "end"], help = "Closes the auction with the given auction ID.")
-    async def manual_close_auction(self, ctx: commands.Context, auction_id: str):
+    async def manual_close_auction(self, ctx: commands.Context):
         """Allows server staff to manually close an auction before its set duration ends."""
         logger.info(f"{ctx.author} invoked the manual_close_auction command")
 
@@ -143,24 +143,24 @@ class AuctionCommands:
 
         auction = self._get_auction(ctx)
         if not auction:
-            await self._send_error_message(ctx, f"Auction {auction_id} not found.")
+            await self._send_error_message(ctx, f"Auction not found in current channel.")
             return
 
         if not await self._validate_close_auction_permissions(ctx, auction):
             return
 
-        await self.close_auction(ctx, auction_id, ctx.guild.id, manual=True)
+        await self.close_auction(ctx, auction.id, ctx.guild.id, manual=True)
         closed_by = ctx.author.display_name
 
         await ctx.send(
             embed=discord.Embed(
                 title="Auction Closed",
-                description=f"Auction {auction_id} has been closed manually by {closed_by}.",
+                description=f"Auction {auction.id} has been closed manually by {closed_by}.",
                 color=discord.Color.orange(),
             )
         )
         logger.info(
-            f"Auction {auction_id} closed manually by {ctx.author.display_name}"
+            f"Auction {auction.id} closed manually by {ctx.author.display_name}"
         )
 
     @commands.command(
