@@ -62,7 +62,12 @@ class AuctionHelpers:
         )
 
     async def _announce_winner(
-        self, channel_id: int, item: str, announcement: str, color: discord.Color
+        self,
+        channel_id: int,
+        item: str,
+        announcement: str,
+        color: discord.Color,
+        auction_id: str,
     ):
         """Announce the auction winner in the specified channel."""
         channel = self.bot.get_channel(channel_id)
@@ -70,6 +75,7 @@ class AuctionHelpers:
             embed = discord.Embed(
                 title=f"Auction Ended: {item}", description=announcement, color=color
             )
+            embed.set_footer(text=f"Auction ID: {auction_id}")
             await channel.send(embed=embed)
         else:
             logger.error(f"Channel {channel_id} not found for auction announcement.")
@@ -314,8 +320,9 @@ class AuctionHelpers:
             del self.auction_timers[auction_id]
 
     async def _wait_for_auction_end(self, auction):
-        remaining_time = self._get_remaining_time(auction)
-        await asyncio.sleep(remaining_time)
+        while self._get_remaining_time(auction) > 0:
+            remaining_time = self._get_remaining_time(auction)
+            await asyncio.sleep(remaining_time)
 
     async def _validate_close_auction_permissions(self, ctx, auction):
         if (

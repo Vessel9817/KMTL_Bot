@@ -6,10 +6,11 @@ import math
 
 def format_time_remaining(remaining_seconds: float):
     # Format the remaining time as HH:MM:SS
-    remaining_weeks = int(remaining_seconds // 604800)
-    remaining_days = int(remaining_seconds // 86400)
-    remaining_hours = int(remaining_seconds // 3600)
     remaining_minutes = int(math.ceil((remaining_seconds % 3600) / 60))
+    remaining_hours = int(remaining_minutes // 60)
+    remaining_days = int(remaining_hours // 24)
+    remaining_weeks = int(remaining_days // 7)
+
     if remaining_weeks > 0:
         formatted_time = f"{remaining_weeks} weels {remaining_days}days"
     elif remaining_days > 0:

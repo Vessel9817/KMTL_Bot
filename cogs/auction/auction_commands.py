@@ -5,7 +5,7 @@ from utils.auction_data import AuctionData
 from utils.utilities import parse_duration, format_time_remaining
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 logger = logging.getLogger("discord_bot")
@@ -16,7 +16,11 @@ class AuctionCommands:
         self.bot = bot
         self.auction_timers = {}  # Dictionary to keep track of auction tasks
 
-    @commands.command(name="startauction", aliases=["sa", "beginauction", "start"], help = "Starts an auction with the given item, starting bid, minimum increment, and duration.")
+    @commands.command(
+        name="startauction",
+        aliases=["sa", "beginauction", "start"],
+        help="Starts an auction with the given item, starting bid, minimum increment, and duration.",
+    )
     async def start_auction(
         self,
         ctx: commands.Context,
@@ -64,7 +68,11 @@ class AuctionCommands:
         auction_timer = asyncio.create_task(self.run_timer(ctx, new_auction))
         self.auction_timers[new_auction.id] = auction_timer
 
-    @commands.command(name="bid", aliases=["placebid", "b"], help = "Places a bid on the active auction with the given bid amount.")
+    @commands.command(
+        name="bid",
+        aliases=["placebid", "b"],
+        help="Places a bid on the active auction with the given bid amount.",
+    )
     async def place_bid(self, ctx: commands.Context, bid_amount_str: str):
         """Places a bid on an active auction with the given auction ID and bid amount."""
         logger.info(f"{ctx.author} attempted to bid with {bid_amount_str}")
@@ -94,8 +102,8 @@ class AuctionCommands:
 
         auction.current_bid = bid_amount
         auction.bidders[ctx.author.display_name] = bid_amount
-        if parse_duration(self._get_remaining_time) < self.MIN_BID_TIME:
-            auction.end_time = datetime.now() + self.MIN_BID_TIME
+        if self._get_remaining_time(auction) < self.MIN_BID_TIME:
+            auction.end_time = datetime.now() + timedelta(seconds=self.MIN_BID_TIME)
         await self.update_auction_embed(auction)
 
         logger.info(f"Bid placed on auction {auction.id} by {ctx.author.display_name}")
@@ -120,22 +128,26 @@ class AuctionCommands:
             logger.error(f"Auction {auction_id} not found in guild {guild_id}.")
             return
 
-        self._cancel_auction_timer(auction_id)
         if not manual:
             await self._wait_for_auction_end(auction)
 
         if not self._is_auction_active(ctx):
             return
+        self._cancel_auction_timer(auction_id)
 
         announcement, color = self._determine_winner(auction)
         await self._announce_winner(
-            auction.channel_id, auction.item, announcement, color
+            auction.channel_id, auction.item, announcement, color, auction_id
         )
         auction.active = False
         await self.update_auction_embed(auction)
         self._remove_auction(ctx)
 
-    @commands.command(name="closeauction", aliases=["ca", "endauction", "close", "end"], help = "Closes the auction with the given auction ID.")
+    @commands.command(
+        name="closeauction",
+        aliases=["ca", "endauction", "close", "end"],
+        help="Closes the auction with the given auction ID.",
+    )
     async def manual_close_auction(self, ctx: commands.Context):
         """Allows server staff to manually close an auction before its set duration ends."""
         logger.info(f"{ctx.author} invoked the manual_close_auction command")
@@ -145,7 +157,9 @@ class AuctionCommands:
 
         auction = self._get_auction(ctx)
         if not auction:
-            await self._send_error_message(ctx, f"Auction not found in current channel.")
+            await self._send_error_message(
+                ctx, f"Auction not found in current channel."
+            )
             return
 
         if not await self._validate_close_auction_permissions(ctx, auction):
@@ -167,8 +181,15 @@ class AuctionCommands:
 
     @commands.command(
         name="ongoingauctions",
-        aliases=["currentauctions", "activeauctions", "active", "ongoing", "current"],
-        help = "Lists all ongoing auctions in the server.",
+        aliases=[
+            "currentauctions",
+            "activeauctions",
+            "active",
+            "ongoing",
+            "current",
+            "oa",
+        ],
+        help="Lists all ongoing auctions in the server.",
     )
     async def check_ongoing_auctions(self, ctx: commands.Context):
         """Lists all ongoing auctions in the server."""
@@ -222,10 +243,11 @@ class AuctionCommands:
 
             await self.update_auction_embed(auction)
 
-            if remaining_seconds > 604800:  # More than a week remains
-                await asyncio.sleep(86400)  # Wait for 1 day before updating again
-            elif remaining_seconds > 86400:  # More than a day remains
-                await asyncio.sleep(3600)  # Wait for 1 hour before updating again
-            else:  # Less than a day remains
-                await asyncio.sleep(60)  # Wait for 60 seconds before updating again
-
+            # Use match case to adjust the interval
+            match remaining_seconds:
+                case seconds if seconds > 604800:  # More than a week remains
+                    await asyncio.sleep(86400)  # Wait for 1 day before updating again
+                case seconds if seconds > 86400:  # More than a day remains
+                    await asyncio.sleep(3600)  # Wait for 1 hour before updating again
+                case _:  # Less than a day remains
+                    await asyncio.sleep(60)  # Wait for 60 seconds before updating again
