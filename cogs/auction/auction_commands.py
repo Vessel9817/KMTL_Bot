@@ -94,6 +94,8 @@ class AuctionCommands:
 
         auction.current_bid = bid_amount
         auction.bidders[ctx.author.display_name] = bid_amount
+        if parse_duration(self._get_remaining_time) < self.MIN_BID_TIME:
+            auction.end_time = datetime.now() + self.MIN_BID_TIME
         await self.update_auction_embed(auction)
 
         logger.info(f"Bid placed on auction {auction.id} by {ctx.author.display_name}")

@@ -14,6 +14,7 @@ class Auction(commands.Cog, AuctionCommands, AuctionHelpers):
     MAX_AUCTIONS_PER_GUILD = 10  # Limit the number of concurrent auctions per guild
     MIN_AUCTION_DURATION = 5 * 60  # Minimum duration for an auction in seconds
     BID_EMOJI_TOGGLE = True  # Toggle to enable/disable bid emoji reactions
+    MIN_BID_TIME = 3 * 60  # Minimum time between bids in seconds
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
