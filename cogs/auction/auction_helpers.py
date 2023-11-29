@@ -96,7 +96,7 @@ class AuctionHelpers:
                 auction_info = (
                     f"Auction ID: {auction.id}\n"
                     f"Item: {auction.item}\n"
-                    f"Current Bid: {self.format_amount(auction.current_bid)}\n"
+                    f"Current Bid: {self.format_amount(auction.current_bid)} by {self._determine_winner} \n" #TODO: Use self.winner instead of determineing winner everytime
                     f"Time Remaining: {format_time_remaining(remaining_seconds)}"
                 )
                 ongoing_auctions.append(auction_info)
