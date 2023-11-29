@@ -93,11 +93,14 @@ class AuctionHelpers:
             # Check if the auction key's guild part (first element of the tuple) matches the provided guild_id
             if auction_key[0] == guild_id and auction.active:
                 remaining_seconds = self._get_remaining_time(auction)
+                if auction.bidders:
+                    highest_bidder, highest_bid = max(
+                    auction.bidders.items(), key=lambda bid: bid[1]
+                    )
                 auction_info = (
                     f"Auction ID: {auction.id}\n"
                     f"Item: {auction.item}\n"
-                    f"Current Bid: {self.format_amount(auction.current_bid)} by {self._determine_winner} \n" #TODO: Use self.winner instead of determineing winner everytime
-                    f"Time Remaining: {format_time_remaining(remaining_seconds)}"
+                    f"Current Bid: {self.format_amount(highest_bid)} by {highest_bidder} \n" #TODO: Make a variable to keep track of highest bidder
                 )
                 ongoing_auctions.append(auction_info)
 
