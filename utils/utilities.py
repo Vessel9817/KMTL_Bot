@@ -15,7 +15,7 @@ def format_time_remaining(remaining_seconds: float):
         remaining_minutes = 0
 
     if remaining_weeks > 0:
-        formatted_time = f"{remaining_weeks} weels {remaining_days}days"
+        formatted_time = f"{remaining_weeks} weeks {remaining_days}days"
     elif remaining_days > 0:
         formatted_time = f"{remaining_days} days {remaining_hours} hours"
     elif remaining_hours > 0:
