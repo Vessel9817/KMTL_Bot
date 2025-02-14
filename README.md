@@ -60,8 +60,10 @@ To deploy the Project Plutus Discord bot, follow these steps:
 - `$help`: Displays a list of available commands and their descriptions.
 
 ## Contributors
-- [*Vessel9817*](https://github.com/Vessel9817)
-- [*LazyMelon*](https://github.com/LazyCorpz)
+
+- [*Vessel9817*](https://github.com/Vessel9817) | [Patreon](https://www.patreon.com/vesselvoid)
+- [*LazyMelon*](https://github.com/LazyCorpz) | Please instead donate to Vessel9817 and send a
+  message asking to have your donation transferred to LazyMelon instead
 
 ## Notes
 
