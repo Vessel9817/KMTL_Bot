@@ -1,7 +1,7 @@
 # Project Plutus
 
 ## Description
-A Discord bot to facilitate auctions for KMTL. It allows users to create auction events, place bids, and manage auction processes seamlessly.
+A Discord bot to facilitate auctions. It allows users to create auction events, place bids, and manage auction processes seamlessly.
 
 ## Features
 - **Auction Creation**: Users can create auction events with specific items, starting bids, and duration.
