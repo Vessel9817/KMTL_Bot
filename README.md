@@ -1,6 +1,7 @@
 # Project Plutus
 
 [![AGPL-3.0-or-later license][license-badge]](LICENSE)
+[![CI][ci-badge]][ci-workflow]
 
 ## Description
 
@@ -92,3 +93,5 @@ To deploy the Project Plutus Discord bot, follow these steps:
 - Bids can be entered in a shorthand notation (e.g., 1k for 1000).
 
 [license-badge]: https://raw.githubusercontent.com/Vessel9817/project-plutus/refs/heads/main/badge.svg
+[ci-workflow]: https://github.com/Vessel9817/project-plutus/actions/workflows/ci.yml
+[ci-badge]: https://github.com/Vessel9817/project-plutus/actions/workflows/ci.yml/badge.svg
