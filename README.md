@@ -36,7 +36,7 @@ To deploy the Project Plutus Discord bot, follow these steps:
 
 3. **Set up the bot environment**:
    - Ensure you have Python installed on your system. (Tested on Python 3.10)
-   - Install the required Python packages with `pip install -r requirements.txt`.
+   - Install the required Python packages with `pip install -r requirements-freeze.txt`.
    - Create a `.env` file in the root directory and add your Discord bot
     token like so:
 
