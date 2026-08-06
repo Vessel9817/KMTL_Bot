@@ -4,8 +4,8 @@ import discord
 from discord.ext import commands
 from utils.auction_data import AuctionData
 from utils.utilities import format_time_remaining
-from datetime import datetime
-from typing import Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Any, cast, Optional, Tuple
 import logging
 import asyncio
 
@@ -13,18 +13,26 @@ logger = logging.getLogger("discord_bot")
 
 
 class AuctionHelpers:
-    def __init__(self, bot):
-        self.bot = bot
+    MIN_AUCTION_DURATION = 5 * 60  # Minimum duration for an auction in seconds
+    MAX_AUCTIONS_PER_GUILD = 10  # Limit the number of concurrent auctions per guild
 
-    def _is_in_guild_context(self, ctx: commands.Context) -> bool:
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+        self.auctions: dict[tuple[int, int], AuctionData] = {}
+        self.auction_timers: dict[Any, asyncio.Task[None]] = {}  # Dictionary to keep track of auction tasks
+        self.next_auction_id = 1
+
+    def _is_in_guild_context(self, ctx: commands.Context[commands.Bot]) -> bool:
         """Check if the command is invoked in a guild (server) context."""
         return ctx.guild is not None
 
     def _has_max_auctions(self, guild_id: int) -> bool:
         """Check if the guild has reached the maximum number of concurrent auctions."""
-        return len(self.auctions.get(guild_id, {})) >= self.MAX_AUCTIONS_PER_GUILD
+        # TODO This should be optimized with the following refactor:
+        # self.auctions: dict[int, dict[int, AuctionData]]
+        return [k[0] for k in self.auctions.keys()].count(guild_id) >= self.MAX_AUCTIONS_PER_GUILD
 
-    def _get_auction(self, ctx: commands.Context) -> Optional[AuctionData]:
+    def _get_auction(self, ctx: commands.Context[commands.Bot]) -> Optional[AuctionData]:
         """Retrieve an auction by its channel within a specific guild."""
         auction_key = self._get_auction_key(ctx)
         return self.auctions.get(auction_key)
@@ -38,16 +46,13 @@ class AuctionHelpers:
 
     def _get_remaining_time(self, auction: AuctionData) -> float:
         """Calculate the remaining time for an auction."""
-        # Make sure auction.end_time is a datetime object
-        if not isinstance(auction.end_time, datetime):
-            logger.error(
-                f"Invalid end_time for auction {auction.id}: {auction.end_time}"
-            )
-            return 0
         remaining_time = (auction.end_time - datetime.now()).total_seconds()
         return max(remaining_time, 0)
 
-    def _determine_winner(self, auction: AuctionData) -> Tuple[str, discord.Color]:
+    def _determine_winner(
+        self,
+        auction: AuctionData
+    ) -> Tuple[str, discord.Color]:
         """Determine the winner of the auction."""
         if auction.bidders:
             winner, winning_bid = max(auction.bidders.items(), key=lambda bid: bid[1])
@@ -68,7 +73,7 @@ class AuctionHelpers:
         announcement: str,
         color: discord.Color,
         auction_id: str,
-    ):
+    ) -> None:
         """Announce the auction winner in the specified channel."""
         channel = self.bot.get_channel(channel_id)
         if channel:
@@ -80,14 +85,14 @@ class AuctionHelpers:
         else:
             logger.error(f"Channel {channel_id} not found for auction announcement.")
 
-    def _remove_auction(self, ctx: commands.Context):
+    def _remove_auction(self, ctx: commands.Context[commands.Bot]) -> None:
         """Remove an auction from the active auctions list."""
         auction_key = self._get_auction_key(ctx)
         self.auctions.pop(auction_key, None)
 
-    def _get_ongoing_auctions(self, guild_id: int) -> list:
+    def _get_ongoing_auctions(self, guild_id: int) -> list[str]:
         """Compile a list of formatted strings representing ongoing auctions."""
-        ongoing_auctions = []
+        ongoing_auctions: list[str] = []
         # Iterate over all auction keys and auction objects
         for auction_key, auction in self.auctions.items():
             # Check if the auction key's guild part (first element of the tuple) matches the provided guild_id
@@ -109,21 +114,32 @@ class AuctionHelpers:
         self.next_auction_id += 1
         return str(auction_id)
 
-    def _get_auction_key(self, ctx: commands.Context) -> tuple:
+    def _get_auction_key(
+        self,
+        ctx: commands.Context[commands.Bot]
+    ) -> tuple[int, int]:
         """Generate a key for the auctions dictionary based on the guild and channel."""
         return (ctx.guild.id, ctx.channel.id)
 
-    def _is_auction_active(self, ctx: commands.Context) -> bool:
+    def _is_auction_active(self, ctx: commands.Context[commands.Bot]) -> bool:
         """Check if there is an active auction in the current channel."""
         auction_key = self._get_auction_key(ctx)
         return auction_key in self.auctions
 
-    def _set_auction(self, ctx: commands.Context, auction_data: AuctionData):
+    def _set_auction(
+        self,
+        ctx: commands.Context[commands.Bot],
+        auction_data: AuctionData
+    ) -> None:
         """Store an auction in the auctions dictionary."""
         auction_key = self._get_auction_key(ctx)
         self.auctions[auction_key] = auction_data
 
-    async def _send_error_message(self, ctx: commands.Context, message: str):
+    async def _send_error_message(
+        self,
+        ctx: commands.Context[commands.Bot],
+        message: str
+    ) -> None:
         """Send an error message embedded in the Discord channel."""
         embed = discord.Embed(
             title="Error", description=message, color=discord.Color.red()
@@ -151,7 +167,7 @@ class AuctionHelpers:
         if auction.active:
             description += f"**Time Remaining:** {formatted_time}"
         else:
-            description += f"**Auction Ended**\n"
+            description += "**Auction Ended**\n"
             description += f"**Winner:** {auction.winner}\n"
 
         # Choose color based on whether it's a start or update
@@ -164,14 +180,16 @@ class AuctionHelpers:
 
         return embed
 
-    async def update_auction_embed(self, auction: AuctionData):
+    async def update_auction_embed(self, auction: AuctionData) -> None:
         """Update the auction embed with the current information."""
         # Create a new embed with updated information
         updated_embed = self._build_auction_embed(auction)
 
         if auction.message_id:
             try:
-                channel = self.bot.get_channel(auction.channel_id)
+                channel = (self.bot.get_channel(auction.channel_id))
+                channel = cast(discord.channel.TextChannel, channel)
+
                 auction_message = await channel.fetch_message(auction.message_id)
                 await auction_message.edit(embed=updated_embed)
             except discord.NotFound:
@@ -183,7 +201,7 @@ class AuctionHelpers:
                     f"Bot does not have permissions to edit the auction message with ID {auction.message_id}."
                 )
 
-    def parse_amount(self, amount_str: str) -> float:
+    def parse_amount(self, amount_str: str) -> Optional[float]:
         """
         Parses a bid amount string into a float.
         Accepts formats like '1k', '1m', '1b', '1t', etc., and their uppercase equivalents,
@@ -239,7 +257,12 @@ class AuctionHelpers:
 
         return formatted_amount + units[idx]
 
-    async def _validate_bid_and_increment(self, ctx, starting_bid, min_increment):
+    async def _validate_bid_and_increment(
+        self,
+        ctx: commands.Context[commands.Bot],
+        starting_bid: Optional[float],
+        min_increment: Optional[float]
+    ) -> bool:
         if starting_bid is None:
             await ctx.send(
                 "Invalid starting bid format. Please enter a number or use formats like '1k', '1m', etc."
@@ -252,7 +275,10 @@ class AuctionHelpers:
             return False
         return True
 
-    async def _validate_guild_and_auction_limits(self, ctx):
+    async def _validate_guild_and_auction_limits(
+        self,
+        ctx: commands.Context[commands.Bot]
+    ) -> bool:
         if not self._is_in_guild_context(ctx):
             await self._send_error_message(
                 ctx, "This command can only be used in a server."
@@ -271,7 +297,11 @@ class AuctionHelpers:
             return False
         return True
 
-    async def _validate_duration(self, ctx, duration):
+    async def _validate_duration(
+        self,
+        ctx: commands.Context[commands.Bot],
+        duration: Optional[timedelta]
+    ) -> bool:
         if duration is None or duration.total_seconds() < self.MIN_AUCTION_DURATION:
             await self._send_error_message(
                 ctx,
@@ -281,8 +311,14 @@ class AuctionHelpers:
         return True
 
     def _create_auction_data(
-        self, auction_id, item, starting_bid, min_increment, end_time, ctx
-    ):
+        self,
+        auction_id: str,
+        item: str,
+        starting_bid: float,
+        min_increment: float,
+        end_time: datetime,
+        ctx: commands.Context[commands.Bot]
+    ) -> AuctionData:
         return AuctionData(
             id=auction_id,
             item=item,
@@ -295,7 +331,10 @@ class AuctionHelpers:
             creator_id=ctx.author.id,
         )
 
-    async def _validate_guild_context_and_auction(self, ctx):
+    async def _validate_guild_context_and_auction(
+        self,
+        ctx: commands.Context[commands.Bot]
+    ) -> bool:
         if not self._is_in_guild_context(ctx):
             await self._send_error_message(
                 ctx, "This command can only be used in a server."
@@ -310,21 +349,29 @@ class AuctionHelpers:
             return False
         return True
 
-    def _validate_bid(self, auction, bid_amount):
-        return auction and self._is_valid_bid(auction, bid_amount)
+    def _validate_bid(
+        self,
+        auction: Optional[AuctionData],
+        bid_amount: float
+    ) -> bool:
+        return auction is not None and self._is_valid_bid(auction, bid_amount)
 
-    def _cancel_auction_timer(self, auction_id):
+    def _cancel_auction_timer(self, auction_id: str) -> None:
         auction_timer = self.auction_timers.get(auction_id)
         if auction_timer and not auction_timer.done():
             auction_timer.cancel()
             del self.auction_timers[auction_id]
 
-    async def _wait_for_auction_end(self, auction):
+    async def _wait_for_auction_end(self, auction: AuctionData) -> None:
         while self._get_remaining_time(auction) > 0:
             remaining_time = self._get_remaining_time(auction)
             await asyncio.sleep(remaining_time)
 
-    async def _validate_close_auction_permissions(self, ctx, auction):
+    async def _validate_close_auction_permissions(
+        self,
+        ctx: commands.Context[commands.Bot],
+        auction: AuctionData
+    ) -> bool:
         if (
             ctx.author.id != auction.creator_id
             and not ctx.author.guild_permissions.manage_channels
@@ -335,18 +382,40 @@ class AuctionHelpers:
             return False
         return True
 
-    async def _handle_command_not_found(self, ctx, error):
+    async def _handle_command_not_found(
+        self,
+        ctx: commands.Context[commands.Bot],
+        _error: commands.CommandError
+    ) -> None:
         logger.info(f"Command not found: {ctx.message.content}")
 
-    async def _handle_missing_required_argument(self, ctx, error):
-        await ctx.send(f"Missing a required argument: {error.param.name}")
+    async def _handle_missing_required_argument(
+        self,
+        ctx: commands.Context[commands.Bot],
+        error: commands.CommandError
+    ) -> None:
+        err_msg = "Missing a required argument"
+        err_msg += f": {error.param.name}" \
+                if isinstance(error, commands.MissingRequiredArgument) \
+                else ''
+        await ctx.send(err_msg)
         await ctx.send_help(ctx.command)
 
-    async def _handle_bad_argument(self, ctx, error):
+    async def _handle_bad_argument(
+        self,
+        ctx: commands.Context[commands.Bot],
+        _error: commands.CommandError
+    ) -> None:
         await ctx.send("One or more arguments are invalid. Please check your input.")
         await ctx.send_help(ctx.command)
 
-    async def _handle_command_on_cooldown(self, ctx, error):
-        await ctx.send(
-            f"This command is on cooldown. Try again after {error.retry_after:.2f} seconds."
-        )
+    async def _handle_command_on_cooldown(
+        self,
+        ctx: commands.Context[commands.Bot],
+        error: commands.CommandError
+    ) -> None:
+        err_msg = "This command is on cooldown. Try again "
+        err_msg += f"after {error.retry_after:.2f} seconds." \
+                if isinstance(error, commands.CommandOnCooldown) \
+                else "later."
+        await ctx.send(err_msg)

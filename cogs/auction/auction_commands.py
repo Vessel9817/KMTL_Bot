@@ -1,34 +1,37 @@
 # cogs/auction/auction_commands.py
 import discord
-from discord.ext import commands, tasks
-from utils.auction_data import AuctionData
-from utils.utilities import parse_duration, format_time_remaining
+from discord.ext import commands
+from utils.utilities import parse_duration
+from .auction_helpers import AuctionData, AuctionHelpers
 import logging
 import asyncio
 from datetime import datetime, timedelta
+from typing import Awaitable, Callable, cast
 
 
 logger = logging.getLogger("discord_bot")
 
 
-class AuctionCommands:
-    def __init__(self, bot):
-        self.bot = bot
-        self.auction_timers = {}  # Dictionary to keep track of auction tasks
+class AuctionCommands(AuctionHelpers):
+    BID_EMOJI_TOGGLE = True  # Toggle to enable/disable bid emoji reactions
+    MIN_BID_TIME = 3 * 60  # Minimum time between bids in seconds
+
+    def __init__(self, bot: commands.Bot):
+        super().__init__(bot)
 
     @commands.command(
         name="startauction",
         aliases=["sa", "beginauction", "start"],
         help="Starts an auction with the given item, starting bid, minimum increment, and duration.",
-    )
+    ) # pyright: ignore # Command struggles with self in the method declaration
     async def start_auction(
         self,
-        ctx: commands.Context,
+        ctx: commands.Context[commands.Bot],
         item: str,
         starting_bid_str: str,
         min_increment_str: str,
         *duration_parts: str,
-    ):
+    ) -> None:
         """Starts a new auction with the provided item, starting bid, minimum increment, and duration."""
         logger.info(f"{ctx.author} invoked the start_auction command")
 
@@ -39,6 +42,9 @@ class AuctionCommands:
         # Validate starting bid and min increment
         if not await self._validate_bid_and_increment(ctx, starting_bid, min_increment):
             return
+
+        starting_bid = cast(float, starting_bid)
+        min_increment = cast(float, min_increment)
 
         # Check for guild context and max auctions
         if not await self._validate_guild_and_auction_limits(ctx):
@@ -72,8 +78,8 @@ class AuctionCommands:
         name="bid",
         aliases=["placebid", "b"],
         help="Places a bid on the active auction with the given bid amount.",
-    )
-    async def place_bid(self, ctx: commands.Context, bid_amount_str: str):
+    ) # pyright: ignore # Command struggles with self in the method declaration
+    async def place_bid(self, ctx: commands.Context[commands.Bot], bid_amount_str: str) -> None:
         """Places a bid on an active auction with the given auction ID and bid amount."""
         logger.info(f"{ctx.author} attempted to bid with {bid_amount_str}")
 
@@ -91,6 +97,15 @@ class AuctionCommands:
             return
 
         auction = self._get_auction(ctx)
+        if not auction:
+            embed = discord.Embed(
+                title="Error",
+                description="No auction started!",
+                color=discord.Color.red(),
+            )
+            await ctx.send(embed=embed)
+            return
+
         if not self._validate_bid(auction, bid_amount):
             embed = discord.Embed(
                 title="Error",
@@ -119,8 +134,12 @@ class AuctionCommands:
             await ctx.send(embed=embed)
 
     async def close_auction(
-        self, ctx, auction_id: str, guild_id: int, manual: bool = False
-    ):
+        self,
+        ctx: commands.Context[commands.Bot],
+        auction_id: str,
+        guild_id: int,
+        manual: bool = False
+    ) -> None:
         """Closes the auction identified by the auction ID, either manually or automatically after the set duration."""
         logger.info(f"Attempting to close auction {auction_id} in guild {guild_id}")
         auction = self._get_auction(ctx)
@@ -147,8 +166,8 @@ class AuctionCommands:
         name="closeauction",
         aliases=["ca", "endauction", "close", "end"],
         help="Closes the auction with the given auction ID.",
-    )
-    async def manual_close_auction(self, ctx: commands.Context):
+    ) # pyright: ignore # Command struggles with self in the method declaration
+    async def manual_close_auction(self, ctx: commands.Context[commands.Bot]) -> None:
         """Allows server staff to manually close an auction before its set duration ends."""
         logger.info(f"{ctx.author} invoked the manual_close_auction command")
 
@@ -158,7 +177,7 @@ class AuctionCommands:
         auction = self._get_auction(ctx)
         if not auction:
             await self._send_error_message(
-                ctx, f"Auction not found in current channel."
+                ctx, "Auction not found in current channel."
             )
             return
 
@@ -190,8 +209,8 @@ class AuctionCommands:
             "oa",
         ],
         help="Lists all ongoing auctions in the server.",
-    )
-    async def check_ongoing_auctions(self, ctx: commands.Context):
+    ) # pyright: ignore # Command struggles with self in the method declaration
+    async def check_ongoing_auctions(self, ctx: commands.Context[commands.Bot]) -> None:
         """Lists all ongoing auctions in the server."""
         if not self._is_in_guild_context(ctx):
             await self._send_error_message(
@@ -216,12 +235,14 @@ class AuctionCommands:
 
     @commands.Cog.listener()
     async def on_command_error(
-        self, ctx: commands.Context, error: commands.CommandError
-    ):
+        self,
+        ctx: commands.Context[commands.Bot],
+        error: commands.CommandError
+    ) -> None:
         if getattr(ctx, "handled", False):
             return
 
-        error_handlers = {
+        error_handlers: dict[type[commands.CommandError], Callable[[commands.Context[commands.Bot], commands.CommandError], Awaitable[None]]] = {
             commands.CommandNotFound: self._handle_command_not_found,
             commands.MissingRequiredArgument: self._handle_missing_required_argument,
             commands.BadArgument: self._handle_bad_argument,
@@ -235,7 +256,11 @@ class AuctionCommands:
 
         logger.error(f"An unexpected error occurred: {error}")
 
-    async def run_timer(self, ctx, auction):
+    async def run_timer(
+        self,
+        ctx: commands.Context[commands.Bot],
+        auction: AuctionData
+    ) -> None:
         if not self._get_auction(ctx):
             return
         while self._get_remaining_time(auction) > 0:

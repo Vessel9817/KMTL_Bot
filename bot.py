@@ -4,10 +4,13 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 import asyncio
+from typing import cast
 
 # Load environment variables from .env file
 load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
+TOKEN = os.getenv('DISCORD_TOKEN', '')
+if len(TOKEN) < 1:
+    raise ValueError('Missing bot token. Please check the .env file')
 
 # Configure logging to output to a file and the console with a specific format
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +30,8 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 # Event listener for when the bot successfully connects to Discord
 @bot.event
 async def on_ready():
-    logger.info(f'{bot.user.name} has connected to Discord!')
+    user = cast(discord.ClientUser, bot.user)
+    logger.info(f'{user.name} has connected to Discord!')
 
 # Function to load cogs asynchronously
 async def load_cogs():
