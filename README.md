@@ -1,5 +1,7 @@
 # Project Plutus
 
+[![AGPL-3.0-or-later license][license-badge]](LICENSE)
+
 ## Description
 A Discord bot to facilitate auctions. It allows users to create auction events, place bids, and manage auction processes seamlessly.
 
@@ -71,3 +73,5 @@ To deploy the Project Plutus Discord bot, follow these steps:
 - To use the auction commands, the user must have the appropriate permissions within the Discord server.
 - Auction durations can be specified using weeks (w), days (d), hours (h), minutes (m), and seconds (s).
 - Bids can be entered in a shorthand notation (e.g., 1k for 1000).
+
+[license-badge]: https://raw.githubusercontent.com/Vessel9817/project-plutus/refs/heads/main/badge.svg
